@@ -182,7 +182,7 @@ public final class EmulationActivity extends AppCompatActivity
 		int themeId;
 		if (mDeviceHasTouchScreen)
 		{
-			themeId = R.style.DolphinEmulationGamecube;
+			themeId = R.style.DolphinEmulationBase;
 
 			// Get a handle to the Window containing the UI.
 			mDecorView = getWindow().getDecorView();
@@ -215,7 +215,7 @@ public final class EmulationActivity extends AppCompatActivity
 		}
 		else
 		{
-			themeId = R.style.DolphinEmulationTvGamecube;
+			themeId = R.style.DolphinEmulationTvBase;
 		}
 
 		setTheme(themeId);
