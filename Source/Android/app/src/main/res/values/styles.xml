@@ -75,6 +75,11 @@
 
         <!-- Use CustomTitleView as the leanback title view. -->
         <item name="browseTitleViewLayout">@layout/titleview</item>
+
+        <!-- This theme is used in an AppCompatActivity, so set these two items to make it work. -->
+
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
     </style>
 
     <style name="InGameMenuOption" parent="Widget.AppCompat.Button.Borderless">

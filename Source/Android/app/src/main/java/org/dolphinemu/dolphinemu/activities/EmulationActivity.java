@@ -37,7 +37,7 @@ import org.dolphinemu.dolphinemu.R;
 import org.dolphinemu.dolphinemu.fragments.EmulationFragment;
 import org.dolphinemu.dolphinemu.fragments.MenuFragment;
 import org.dolphinemu.dolphinemu.fragments.SaveLoadStateFragment;
-import org.dolphinemu.dolphinemu.ui.main.MainPresenter;
+import org.dolphinemu.dolphinemu.ui.main.MainActivity;
 import org.dolphinemu.dolphinemu.ui.platform.Platform;
 import org.dolphinemu.dolphinemu.utils.Animations;
 import org.dolphinemu.dolphinemu.utils.Java_GCAdapter;
@@ -162,7 +162,7 @@ public final class EmulationActivity extends AppCompatActivity
 
 		// I believe this warning is a bug. Activities are FragmentActivity from the support lib
 		//noinspection RestrictedApi
-		activity.startActivityForResult(launcher, MainPresenter.REQUEST_EMULATE_GAME, options.toBundle());
+		activity.startActivityForResult(launcher, MainActivity.REQUEST_EMULATE_GAME, options.toBundle());
 	}
 
 	@Override

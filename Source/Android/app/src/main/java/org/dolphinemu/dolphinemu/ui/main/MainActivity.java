@@ -5,155 +5,84 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.TabLayout;
-import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
-import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Toast;
 
+import org.dolphinemu.dolphinemu.DolphinApplication;
 import org.dolphinemu.dolphinemu.R;
 import org.dolphinemu.dolphinemu.activities.AddDirectoryActivity;
-import org.dolphinemu.dolphinemu.adapters.PlatformPagerAdapter;
+import org.dolphinemu.dolphinemu.model.GameDatabase;
 import org.dolphinemu.dolphinemu.model.GameProvider;
 import org.dolphinemu.dolphinemu.ui.platform.Platform;
-import org.dolphinemu.dolphinemu.ui.platform.PlatformGamesView;
 import org.dolphinemu.dolphinemu.ui.settings.SettingsActivity;
 import org.dolphinemu.dolphinemu.utils.PermissionsHandler;
+import org.dolphinemu.dolphinemu.utils.SettingsFile;
 import org.dolphinemu.dolphinemu.utils.StartupHandler;
 
-/**
- * The main Activity of the Lollipop style UI. Manages several PlatformGamesFragments, which
- * individually display a grid of available games for each Fragment, in a tabbed layout.
- */
-public final class MainActivity extends AppCompatActivity implements MainView
-{
-	private ViewPager mViewPager;
-	private Toolbar mToolbar;
-	private TabLayout mTabLayout;
-	private FloatingActionButton mFab;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.functions.Action1;
+import rx.schedulers.Schedulers;
 
-	private MainPresenter mPresenter = new MainPresenter(this);
+/**
+ * The main Activity holding non form-factor specific logic.
+ *
+ * Clients are expected to subclass this, and set the correct theme in the manifest.
+ *
+ * Normally we couldn't use AppCompatActivity with the leanback theme, but we cheat a bit (see the
+ * style) to make the object composition much simpler.
+ */
+public abstract class MainActivity extends AppCompatActivity
+{
+	public static final int REQUEST_ADD_DIRECTORY = 1;
+	public static final int REQUEST_EMULATE_GAME = 2;
+
+	private static final String MAIN_FRAGMENT_TAG = "main_fragment";
+	private MainFragment mMainFragment;
 
 	@Override
-	protected void onCreate(Bundle savedInstanceState)
+	protected void onCreate(@Nullable Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 
-		findViews();
-
-		setSupportActionBar(mToolbar);
-
-		mTabLayout.setupWithViewPager(mViewPager);
-
-		// Set up the FAB.
-		mFab.setOnClickListener(new View.OnClickListener()
-		{
-			@Override
-			public void onClick(View view)
-			{
-				mPresenter.onFabClick();
-			}
-		});
-
-		mPresenter.onCreate();
-
-		// Stuff in this block only happens when this activity is newly created (i.e. not a rotation)
+		// Stuff in this block only happens when this activity is newly created (not a rotation)
 		// TODO Split some of this stuff into Application.onCreate()
 		if (savedInstanceState == null)
 			StartupHandler.HandleInit(this);
 
 		if (PermissionsHandler.hasWriteAccess(this))
 		{
-			PlatformPagerAdapter platformPagerAdapter = new PlatformPagerAdapter(
-					getSupportFragmentManager(), this);
-			mViewPager.setAdapter(platformPagerAdapter);
-		} else {
-			mViewPager.setVisibility(View.INVISIBLE);
+			setupMainFragment(savedInstanceState == null);
 		}
 	}
 
-	// TODO: Replace with a ButterKnife injection.
-	private void findViews()
+	@Override
+	protected void onStart()
 	{
-		mToolbar = (Toolbar) findViewById(R.id.toolbar_main);
-		mViewPager = (ViewPager) findViewById(R.id.pager_platforms);
-		mTabLayout = (TabLayout) findViewById(R.id.tabs_platforms);
-		mFab = (FloatingActionButton) findViewById(R.id.button_add_directory);
+		super.onStart();
+
+		scanAndUpdateGames();
 	}
 
 	@Override
-	public boolean onCreateOptionsMenu(Menu menu)
+	protected void onActivityResult(int requestCode, int resultCode, Intent data)
 	{
-		MenuInflater inflater = getMenuInflater();
-		inflater.inflate(R.menu.menu_game_grid, menu);
-		return true;
-	}
-
-	/**
-	 * MainView
-	 */
-
-	@Override
-	public void setVersionString(String version)
-	{
-		mToolbar.setSubtitle(version);
-	}
-
-	@Override
-	public void refresh()
-	{
-		getContentResolver().insert(GameProvider.URI_REFRESH, null);
-		refreshFragment();
-	}
-
-	@Override
-	public void refreshFragmentScreenshot(int fragmentPosition)
-	{
-		// Invalidate Picasso image so that the new screenshot is animated in.
-		Platform platform = Platform.fromPosition(mViewPager.getCurrentItem());
-		PlatformGamesView fragment = getPlatformGamesView(platform);
-
-		if (fragment != null)
+		switch (requestCode)
 		{
-			fragment.refreshScreenshotAtPosition(fragmentPosition);
+			case REQUEST_ADD_DIRECTORY:
+				// If the user picked a file, as opposed to just backing out.
+				if (resultCode == RESULT_OK)
+				{
+					getContentResolver().insert(GameProvider.URI_REFRESH, null);
+					scanAndUpdateGames();
+				}
+				break;
+
+			case REQUEST_EMULATE_GAME:
+				mMainFragment.refreshFragmentScreenshot(resultCode);
+				break;
 		}
-	}
-
-	@Override
-	public void launchSettingsActivity(String menuTag)
-	{
-		SettingsActivity.launch(this, menuTag);
-	}
-
-	@Override
-	public void launchFileListActivity()
-	{
-		AddDirectoryActivity.launch(this);
-	}
-
-	@Override
-	public void showGames(Platform platform, Cursor games)
-	{
-		// no-op. Handled by PlatformGamesFragment.
-	}
-
-	/**
-	 * Callback from AddDirectoryActivity. Applies any changes necessary to the GameGridActivity.
-	 *
-	 * @param requestCode An int describing whether the Activity that is returning did so successfully.
-	 * @param resultCode  An int describing what Activity is giving us this callback.
-	 * @param result      The information the returning Activity is providing us.
-	 */
-	@Override
-	protected void onActivityResult(int requestCode, int resultCode, Intent result)
-	{
-		mPresenter.handleActivityResult(requestCode, resultCode);
 	}
 
 	@Override
@@ -161,13 +90,8 @@ public final class MainActivity extends AppCompatActivity implements MainView
 		switch (requestCode) {
 			case PermissionsHandler.REQUEST_CODE_WRITE_PERMISSION:
 				if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-					StartupHandler.copyAssetsIfNeeded(this);
-
-					PlatformPagerAdapter platformPagerAdapter = new PlatformPagerAdapter(
-							getSupportFragmentManager(), this);
-					mViewPager.setAdapter(platformPagerAdapter);
-					mTabLayout.setupWithViewPager(mViewPager);
-					mViewPager.setVisibility(View.VISIBLE);
+					// If we just got permissions granted, always create the fragment.
+					setupMainFragment(true);
 				} else {
 					Toast.makeText(this, R.string.write_permission_needed, Toast.LENGTH_SHORT)
 							.show();
@@ -179,34 +103,96 @@ public final class MainActivity extends AppCompatActivity implements MainView
 		}
 	}
 
-	/**
-	 * Called by the framework whenever any actionbar/toolbar icon is clicked.
-	 *
-	 * @param item The icon that was clicked on.
-	 * @return True if the event was handled, false to bubble it up to the OS.
-	 */
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item)
 	{
-		return mPresenter.handleOptionSelection(item.getItemId());
+		return onOptionsItemSelected(item.getItemId());
 	}
 
-	private void refreshFragment()
+	public boolean onOptionsItemSelected(int itemId)
 	{
-
-		Platform platform = Platform.fromPosition(mViewPager.getCurrentItem());
-		PlatformGamesView fragment = getPlatformGamesView(platform);
-		if (fragment != null)
+		switch (itemId)
 		{
-			fragment.refresh();
+			case R.id.menu_settings_core:
+				launchSettingsActivity(SettingsFile.FILE_NAME_DOLPHIN);
+				return true;
+
+			case R.id.menu_settings_video:
+				launchSettingsActivity(SettingsFile.FILE_NAME_GFX);
+				return true;
+
+			case R.id.menu_settings_gcpad:
+				launchSettingsActivity(SettingsFile.FILE_NAME_GCPAD);
+				return true;
+
+			case R.id.menu_settings_wiimote:
+				launchSettingsActivity(SettingsFile.FILE_NAME_WIIMOTE);
+				return true;
+
+			case R.id.menu_refresh:
+				scanAndUpdateGames();
+				return true;
+
+			case R.id.button_add_directory:
+				launchFileListActivity();
+				return true;
+		}
+
+		return false;
+	}
+
+	public void launchFileListActivity()
+	{
+		AddDirectoryActivity.launch(this);
+	}
+
+	public void launchSettingsActivity(String menuTag)
+	{
+		SettingsActivity.launch(this, menuTag);
+	}
+
+	private void setupMainFragment(boolean createFragment)
+	{
+		StartupHandler.copyAssetsIfNeeded(this);
+
+		if (createFragment)
+		{
+			mMainFragment = createNewMainFragment();
+			getSupportFragmentManager().beginTransaction()
+					.add(R.id.frame_main, mMainFragment, MAIN_FRAGMENT_TAG)
+					.commit();
+		}
+		else
+		{
+			mMainFragment = (MainFragment) getSupportFragmentManager()
+					.findFragmentByTag(MAIN_FRAGMENT_TAG);
+			if (mMainFragment == null)
+			{
+				throw new IllegalStateException("Cannot find existing MainFragment");
+			}
 		}
 	}
 
-	@Nullable
-	private PlatformGamesView getPlatformGamesView(Platform platform)
+	private void scanAndUpdateGames()
 	{
-		String fragmentTag = "android:switcher:" + mViewPager.getId() + ":" + platform;
+		GameDatabase databaseHelper = DolphinApplication.databaseHelper;
+		databaseHelper.scanLibrary(databaseHelper.getWritableDatabase());
 
-		return (PlatformGamesView) getSupportFragmentManager().findFragmentByTag(fragmentTag);
-	}
+		for (final Platform platform : Platform.values())
+		{
+			databaseHelper.getGamesForPlatform(platform)
+					.subscribeOn(Schedulers.io())
+					.observeOn(AndroidSchedulers.mainThread())
+					.subscribe(new Action1<Cursor>()
+							   {
+								   @Override
+								   public void call(Cursor games)
+								   {
+									   mMainFragment.showGames(platform, games);
+								   }
+							   }
+					);
+		}}
+
+	public abstract MainFragment createNewMainFragment();
 }
